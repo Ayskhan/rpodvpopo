@@ -1,0 +1,609 @@
+unit Unit1;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, DateUtils, tlhelp32,StdCtrls, ExtCtrls, Menus, ComCtrls, PsAPI,
+  ShellAPI, Unit2, Spin, Clipbrd, Registry;
+
+type
+  TForm1 = class(TForm)
+    StopTimer: TButton;
+    ListBox2: TListBox;
+    ListBox3: TListBox;
+    Timer1: TTimer;
+    PopupMenu1: TPopupMenu;
+    N1: TMenuItem;
+    ListBox1: TListBox;
+    OpenDialog1: TOpenDialog;
+    StartTimer: TButton;
+    Button7: TButton;
+    Edit1: TEdit;
+    GetInfoOnID: TButton;
+    ComboBox1: TComboBox;
+    ExeInfo: TButton;
+    ListBox4: TListBox;
+    RegEdit: TButton;
+    OpenedFiles: TButton;
+    Label1: TLabel;
+    AutoRunOff: TButton;
+    MainMenu1: TMainMenu;
+    N2: TMenuItem;
+    N3: TMenuItem;
+    N4: TMenuItem;
+    J1: TMenuItem;
+    N6: TMenuItem;
+    N7: TMenuItem;
+    function FileTime2DateTime(FileTime: TFileTime): TDateTime;
+    procedure Timer1Timer(Sender: TObject);
+    procedure N1Click(Sender: TObject);
+    procedure StopTimerClick(Sender: TObject);
+    procedure Button4MouseMove(Sender: TObject; Shift: TShiftState; X,
+      Y: Integer);
+    procedure StartTimerClick(Sender: TObject);
+    function KillTask(ExeFileName: string): integer;
+    procedure Button7Click(Sender: TObject);
+    function ProcessFileName(PID: DWORD): string;
+    procedure GetInfoOnIDClick(Sender: TObject);
+    procedure ComboBox1Change(Sender: TObject);
+    procedure ExeInfoClick(Sender: TObject);
+    procedure RegEditClick(Sender: TObject);
+    procedure OpenedFilesClick(Sender: TObject);
+    procedure AutoRunOffClick(Sender: TObject);
+    procedure N2Click(Sender: TObject);
+    procedure N3Click(Sender: TObject);
+    procedure N4Click(Sender: TObject);
+    procedure ListBox1Click(Sender: TObject);
+    procedure N7Click(Sender: TObject);
+    procedure N6Click(Sender: TObject);
+                                           
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  Form1: TForm1;
+  HandleSnapShot, h :THandle;
+  DummyCreateFileTime,DummyExitFileTime,
+  DummyKernelFileTime,DummyUserFileTime : Windows.FILETIME;
+  aFileName, bFileName, FileName1, selected, NewName : String;
+  EntryParentProc  : TProcessEntry32;  
+  ActualTime, Dif, CreationTime : TDateTime;
+  attr, IndexL, Index1: integer;
+  Read, Hidden, SysFile, Volume,
+  Dir, Archive, SymLink, PathP : string;
+  File1 : TextFile;
+
+
+implementation
+
+uses Unit3, Unit4;
+
+{$R *.dfm}
+
+function TForm1.FileTime2DateTime(FileTime: TFileTime): TDateTime;
+var
+  LocalTime: TFileTime;
+  DOSTime  : Integer;
+begin
+  FileTimeToLocalFileTime(FileTime, LocalTime);
+  FileTimeToDosDateTime(LocalTime, LongRec(DOSTime).Hi, LongRec(DOSTime).Lo);
+  Result := FileDateToDateTime(DOSTime);
+end;
+
+procedure TForm1.Timer1Timer(Sender: TObject);
+begin
+//  Label1.Caption := IntToStr(Index1);
+  ListBox1.Clear;
+  ListBox2.Clear;
+  ListBox3.Clear;
+  ListBox4.Clear;
+  HandleSnapShot := CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);  //get the list of process
+  if HandleSnapShot <> INVALID_HANDLE_VALUE then
+  begin
+    EntryParentProc.dwSize := SizeOf(EntryParentProc);
+    if Process32First(HandleSnapShot, EntryParentProc) then   //Get the first process in the list
+    begin
+      listbox1.Items.add( Format('%-30s',['Process'])  );
+//      with ListView1.Items.add do begin
+//      Caption := 'sdf2';
+//      ImageIndex := 0;
+//      end;
+      listbox2.Items.add( Format('%-20s',['Start'])  );
+      listbox3.Items.add( Format('%-16s',['Running Time'])  );
+      ListBox4.Items.Add('ID');
+      ActualTime:=Now;
+      repeat
+          h:=OpenProcess(PROCESS_QUERY_INFORMATION,false,EntryParentProc.th32ProcessID);  //open a particular process
+          if GetProcessTimes(h, DummyCreateFileTime, DummyExitFileTime, DummyKernelFileTime, DummyUserFileTime) then  //get the timing  info
+          begin
+            aFileName:=EntryParentProc.szExeFile;
+//            bFileName:=ParamStr(0);
+//            AssignFile(File1, 'File.txt');
+//            {$I-}
+//            Append (File1);
+//            {$I+}
+//            if IOResult <> 0
+//              then Rewrite(File1);
+//              WriteLn(File1,bFileName);
+//              CloseFile(File1);
+            CreationTime:=FileTime2DateTime(DummyCreateFileTime); //get the initial time of the process
+            Dif :=  ActualTime-CreationTime; //calculate the elapsed time
+//            with ListView1.Items.add do begin
+//            Caption := aFileName;
+//            ImageIndex :=0;
+//            end;
+            
+            ListBox1.Items.Add( Format('%-30s',[aFileName])  );
+            listbox2.Items.add( Format('%-20s',[FormatDateTime('DD-MM-YYYY HH:NN:SS',CreationTime)])  );
+            listbox3.Items.add( Format('%-16s',[FormatDateTime('HH:NN:SS',Dif)])  );
+            ListBox4.Items.Add(IntToStr(EntryParentProc.th32ProcessID));
+          end;
+          CloseHandle(h);
+      until not Process32Next(HandleSnapShot, EntryParentProc);
+    end;
+    CloseHandle(HandleSnapShot);
+  end;
+  ListBox1.ItemIndex := Index1;
+  ListBox2.ItemIndex := Index1;
+  ListBox3.ItemIndex := Index1;
+  ListBox4.ItemIndex := Index1;
+end;
+
+procedure TForm1.N1Click(Sender: TObject);
+begin
+IndexL := ListBox1.ItemIndex;
+PathP := ListBox1.Items[IndexL];
+KillTask(Trim(PathP));
+MessageDlg(PathP, mtInformation, [mbOk], 0);
+
+end;
+
+procedure TForm1.StopTimerClick(Sender: TObject);
+begin
+Timer1.Enabled := false;
+StopTimer.Visible :=False;
+StartTimer.Visible := True;
+end;
+
+
+
+
+procedure TForm1.Button4MouseMove(Sender: TObject; Shift: TShiftState; X,
+  Y: Integer);
+begin
+  MessageDlg ('dfjs', mtInformation, [mbOk], 0);
+end;
+
+procedure TForm1.StartTimerClick(Sender: TObject);
+begin
+Timer1.Enabled := true;
+StartTimer.Visible := false;
+StopTimer.Visible := true;
+end;
+
+function TForm1.KillTask(ExeFileName: string): integer;
+const
+  PROCESS_TERMINATE=$0001;
+var
+  ContinueLoop: BOOL;
+  FSnapshotHandle: THandle;
+  FProcessEntry32: TProcessEntry32;
+begin 
+  result := 0; 
+
+  FSnapshotHandle := CreateToolhelp32Snapshot
+                     (TH32CS_SNAPPROCESS, 0);
+  FProcessEntry32.dwSize := Sizeof(FProcessEntry32);
+  ContinueLoop := Process32First(FSnapshotHandle,
+                                 FProcessEntry32);
+
+  while integer(ContinueLoop) <> 0 do
+  begin
+    if ((UpperCase(ExtractFileName(FProcessEntry32.szExeFile)) =
+         UpperCase(ExeFileName))
+     or (UpperCase(FProcessEntry32.szExeFile) =
+         UpperCase(ExeFileName))) then
+      Result := Integer(TerminateProcess(OpenProcess(
+                        PROCESS_TERMINATE, BOOL(0),
+                        FProcessEntry32.th32ProcessID), 0));
+
+
+    ContinueLoop := Process32Next(FSnapshotHandle,
+                                  FProcessEntry32);
+  end;
+
+  CloseHandle(FSnapshotHandle);
+end;
+
+procedure TForm1.Button7Click(Sender: TObject);
+var FullFName, dir : string;
+begin
+  IndexL := StrToInt(Edit1.Text);
+
+   FullFName := ProcessFileName(IndexL);
+   if (Length(FullFName)>0) and FileExists(FullFName) then begin
+      dir:=extractfiledir(FullFName);
+      Label1.Visible := true;
+      Label1.Caption := FullFName;
+      ClipBoard.SetTextBuf(PChar(dir));
+      ShellExecute(Handle,nil,PChar(dir),nil,nil,SW_RESTORE);
+   end
+   else
+     Application.MessageBox(Pchar('File '+ FullFName + 'not exist'),
+          'dubuging', MB_OK);
+end;
+
+function TForm1.ProcessFileName(PID: DWORD): string;
+var
+  Handle: THandle;
+begin
+  Result := '';
+  Handle := OpenProcess(PROCESS_QUERY_INFORMATION or PROCESS_VM_READ, False, PID);
+  if Handle <> 0 then
+    try
+      SetLength(Result, MAX_PATH);
+        if GetModuleFileNameEx(Handle, 0, PChar(Result), MAX_PATH) > 0 then
+          SetLength(Result, StrLen(PChar(Result)))
+        else
+          Result := '';
+    finally
+      CloseHandle(Handle);
+    end;
+end;
+
+procedure TForm1.GetInfoOnIDClick(Sender: TObject);
+begin
+  Form2.ShowModal;
+end;
+
+
+
+procedure TForm1.ComboBox1Change(Sender: TObject);
+begin
+Case ComboBox1.ItemIndex of
+  0: Timer1.Interval := 500;
+  1: Timer1.Interval := 750;
+  2: Timer1.Interval := 1000;
+  3: Timer1.Interval := 2500;
+  4: Timer1.Interval := 5000;
+  end;
+end;
+
+procedure TForm1.ExeInfoClick(Sender: TObject);
+begin
+ShellExecute(Form1.Handle, nil, PChar(ExtractFilePath(Application.ExeName)+'\utilities\EXE_PE_Properties\'+'isexe.exe'), nil, nil, SW_SHOW);
+//  Windows.Beep(1000,500);
+end;
+
+procedure TForm1.RegEditClick(Sender: TObject);
+begin
+ShellExecute(Form1.Handle, nil, PChar(ExtractFilePath(Application.ExeName)+'\utilities\regdate.exe'), nil, nil, SW_SHOW);
+end;
+
+procedure TForm1.OpenedFilesClick(Sender: TObject);
+begin
+ShellExecute(Form1.Handle, nil, PChar(ExtractFilePath(Application.ExeName)+'\utilities\EnumOpenFiles.exe'), nil, nil, SW_SHOW);
+end;
+
+procedure TForm1.AutoRunOffClick(Sender: TObject);
+var reg: tregistry;
+begin
+reg := tregistry.create;
+reg.rootkey := HKEY_CURRENT_USER;
+reg.openkey('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', true);
+reg.writestring('NoDriveTypeAutoRun', 'dword:00000091');
+reg.closekey;
+reg.free;
+end;
+
+procedure TForm1.N2Click(Sender: TObject);
+begin
+Form3.ShowModal;
+end;
+
+procedure TForm1.N3Click(Sender: TObject);
+begin
+    SetFileAttributes(PAnsiChar(Form4.s), 128);
+    DeleteFile(Form4.s);
+end;
+
+procedure TForm1.N4Click(Sender: TObject);
+begin
+    SetFileAttributes(PAnsiChar(Form4.s), 128);
+    NewName := Form4.s +'.vir';
+    RenameFile(Form4.s, NewName);
+end;
+
+procedure TForm1.ListBox1Click(Sender: TObject);
+begin
+  Index1 := ListBox1.ItemIndex;
+end;
+
+procedure TForm1.N7Click(Sender: TObject);
+begin
+MessageDlg('Автор: Айсханов Магомед.' + #13
+  + 'Условия AS IS', mtInformation,[mbOk],0);
+end;
+
+procedure TForm1.N6Click(Sender: TObject);
+var
+  t: longword;
+  hour: word;
+  min, sec: byte;
+begin
+  t := GetTickCount div 1000;
+  hour := t div 3600;
+  t := t mod 3600;
+  min := t div 60;
+  sec := t mod 60;
+  ShowMessage(IntToStr(hour) + ':' + IntToStr(min) + ':' + IntToStr(sec));
+end;
+
+
+end.
+unit unit2;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls;
+
+type
+  Tform2 = class(TForm)
+    Memo1: TMemo;
+    Edit1: TEdit;
+    Button1: TButton;
+    procedure Button1Click(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  form2: Tform2;
+
+implementation
+
+{$R *.dfm}
+type
+   PDebugModule = ^TDebugModule;
+   TDebugModule = packed record
+     Reserved: array [0..1] of Cardinal;
+     Base: Cardinal;
+     Size: Cardinal;
+     Flags: Cardinal;
+     Index: Word;
+     Unknown: Word;
+     LoadCount: Word;
+     ModuleNameOffset: Word;
+     ImageName: array [0..$FF] of Char;
+   end;
+
+ type
+   PDebugModuleInformation = ^TDebugModuleInformation;
+   TDebugModuleInformation = record
+     Count: Cardinal;
+     Modules: array [0..0] of TDebugModule;
+   end;
+   PDebugBuffer = ^TDebugBuffer;
+   TDebugBuffer = record
+     SectionHandle: THandle;
+     SectionBase: Pointer;
+     RemoteSectionBase: Pointer;
+     SectionBaseDelta: Cardinal;
+     EventPairHandle: THandle;
+     Unknown: array [0..1] of Cardinal;
+     RemoteThreadHandle: THandle;
+     InfoClassMask: Cardinal;
+     SizeOfInfo: Cardinal;
+     AllocatedSize: Cardinal;
+     SectionSize: Cardinal;
+     ModuleInformation: PDebugModuleInformation;
+     BackTraceInformation: Pointer;
+     HeapInformation: Pointer;
+     LockInformation: Pointer;
+     Reserved: array [0..7] of Pointer;
+   end;
+
+ const
+   PDI_MODULES = $01;
+   ntdll = 'ntdll.dll';
+
+ var
+   HNtDll: HMODULE;
+
+ type
+   TFNRtlCreateQueryDebugBuffer = function(Size: Cardinal;
+     EventPair: Boolean): PDebugBuffer;
+    stdcall;
+   TFNRtlQueryProcessDebugInformation = function(ProcessId,
+     DebugInfoClassMask: Cardinal; var DebugBuffer: TDebugBuffer): Integer;
+    stdcall;
+   TFNRtlDestroyQueryDebugBuffer = function(DebugBuffer: PDebugBuffer): Integer;
+    stdcall;
+
+ var
+   RtlCreateQueryDebugBuffer: TFNRtlCreateQueryDebugBuffer;
+   RtlQueryProcessDebugInformation: TFNRtlQueryProcessDebugInformation;
+   RtlDestroyQueryDebugBuffer: TFNRtlDestroyQueryDebugBuffer;
+
+ function LoadRtlQueryDebug: LongBool;
+ begin
+   if HNtDll = 0 then
+   begin
+     HNtDll := LoadLibrary(ntdll);
+     if HNtDll <> 0 then
+     begin
+       RtlCreateQueryDebugBuffer       := GetProcAddress(HNtDll, 'RtlCreateQueryDebugBuffer');
+       RtlQueryProcessDebugInformation := GetProcAddress(HNtDll,
+         'RtlQueryProcessDebugInformation');
+       RtlDestroyQueryDebugBuffer      := GetProcAddress(HNtDll,
+         'RtlDestroyQueryDebugBuffer');
+     end;
+   end;
+   Result := Assigned(RtlCreateQueryDebugBuffer) and
+     Assigned(RtlQueryProcessDebugInformation) and
+     Assigned(RtlQueryProcessDebugInformation);
+ end;
+
+ procedure Tform2.Button1Click(Sender: TObject);
+ var
+   DbgBuffer: PDebugBuffer;
+   Loop: Integer;
+ begin
+   if not LoadRtlQueryDebug then Exit;
+
+   Memo1.Clear;
+   Memo1.Lines.BeginUpdate;
+   DbgBuffer := RtlCreateQueryDebugBuffer(0, False);
+   if Assigned(DbgBuffer) then
+     try
+       if RtlQueryProcessDebugInformation(StrToIntDef(Edit1.Text, GetCurrentProcessId),
+         PDI_MODULES, DbgBuffer^) >= 0 then
+       begin
+         for Loop := 0 to DbgBuffer.ModuleInformation.Count - 1 do
+           with DbgBuffer.ModuleInformation.Modules[Loop], Memo1.Lines do
+           begin
+             Add('ImageName: ' + ImageName);
+             Add('  Reserved0: ' + IntToHex(Reserved[0], 8));
+             Add('  Reserved1: ' + IntToHex(Reserved[1], 8));
+             Add('  Base: ' + IntToHex(Base, 8));
+             Add('  Size: ' + IntToHex(Size, 8));
+             Add('  Flags: ' + IntToHex(Flags, 8));
+             Add('  Index: ' + IntToHex(Index, 4));
+             Add('  Unknown: ' + IntToHex(Unknown, 4));
+             Add('  LoadCount: ' + IntToHex(LoadCount, 4));
+             Add('  ModuleNameOffset: ' + IntToHex(ModuleNameOffset, 4));
+           end;
+       end;
+     finally
+       RtlDestroyQueryDebugBuffer(DbgBuffer);
+     end;
+   Memo1.Lines.EndUpdate;
+ end;
+
+procedure Tform2.FormCreate(Sender: TObject);
+begin
+  Memo1.Clear;
+  Edit1.Clear;
+end;
+
+end.
+unit Unit3;
+
+interface                          
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls, Buttons, ComCtrls, ShellCtrls;
+
+type
+  TForm3 = class(TForm)
+    BitBtn1: TBitBtn;
+    Edit1: TEdit;
+    Label1: TLabel;
+    Label2: TLabel;
+    Memo1: TMemo;
+    procedure BitBtn1Click(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  Form3: TForm3;
+
+implementation
+
+uses Unit4;
+
+{$R *.dfm}
+
+procedure TForm3.BitBtn1Click(Sender: TObject);
+begin
+  Form4.ShowModal;
+end;
+
+end.
+
+unit Unit4;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, ComCtrls, ShellCtrls, StdCtrls, FileCtrl, Buttons;
+
+type
+  TForm4 = class(TForm)
+    FileListBox1: TFileListBox;
+    DirectoryListBox1: TDirectoryListBox;
+    DriveComboBox1: TDriveComboBox;
+    BitBtn1: TBitBtn;
+    BitBtn2: TBitBtn;
+    Label1: TLabel;
+    Label2: TLabel;
+    Label3: TLabel;
+    Edit1: TEdit;
+    procedure BitBtn1Click(Sender: TObject);
+    procedure DirectoryListBox1Change(Sender: TObject);
+    procedure BitBtn2Click(Sender: TObject);
+    procedure FileListBox1DblClick(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+    s: string;
+  end;
+
+var
+  Form4: TForm4;
+
+implementation
+
+uses Unit3;
+
+{$R *.dfm}
+
+procedure TForm4.BitBtn1Click(Sender: TObject);
+var attr: Integer;
+begin
+  s := FileListBox1.FileName;
+  if s <> '' then
+    begin
+      Form3.Edit1.Text := s;
+      Form3.Memo1.Lines.Clear;
+      attr := FileGetAttr(s);
+      if (attr and faHidden) <> 0 then Form3.Memo1.Lines.Add('Hidden');
+      if (attr and faReadOnly) <> 0 then Form3.Memo1.Lines.Add('Read-Only');
+      if (attr and faSysFile) <> 0 then Form3.Memo1.Lines.Add('System');
+      if (attr and faArchive) <> 0 then Form3.Memo1.Lines.Add('Archive');
+    end;
+  Close;
+end;
+
+procedure TForm4.DirectoryListBox1Change(Sender: TObject);
+begin
+  Edit1.Text := DirectoryListBox1.Directory;
+end;
+
+procedure TForm4.BitBtn2Click(Sender: TObject);
+begin
+   Form3.Edit1.Clear;
+   Close;
+end;
+
+procedure TForm4.FileListBox1DblClick(Sender: TObject);
+begin
+  BitBtn1Click(nil);
+end;
+
+end.
